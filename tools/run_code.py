@@ -5,7 +5,10 @@ from dotenv import load_dotenv
 import os
 from google.genai import types
 load_dotenv()
-client = genai.Client()
+api_key = os.getenv("GOOGLE_API_KEY")
+if not api_key:
+    raise ValueError("Missing GOOGLE_API_KEY environment variable!")
+client = genai.Client(api_key=api_key)
 
 def strip_code_fences(code: str) -> str:
     code = code.strip()
