@@ -25,7 +25,7 @@ ENV PYTHONIOENCODING=utf-8
 # --- Install project dependencies using uv ---
 RUN uv sync --frozen
 
-# HuggingFace Spaces exposes port 7860
+# Railway and HuggingFace Spaces expect processes to listen on the $PORT env variable; FastAPI will read PORT automatically.
 EXPOSE 7860
 
 # --- Run your FastAPI app ---
