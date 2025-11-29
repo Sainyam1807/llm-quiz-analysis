@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from agent import run_agent
+from agent import run_agent_with_retries
 from dotenv import load_dotenv
 import uvicorn
 import os
@@ -46,7 +46,7 @@ async def solve(request: Request, background_tasks: BackgroundTasks):
     if secret != SECRET:
         raise HTTPException(status_code=403, detail="Invalid secret")
     print("Verified starting the task...")
-    background_tasks.add_task(run_agent, url)
+    background_tasks.add_task(run_agent_with_retries, url)
 
     return JSONResponse(status_code=200, content={"status": "ok"})
 

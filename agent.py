@@ -92,14 +92,12 @@ prompt = ChatPromptTemplate.from_messages([
 
 llm_with_prompt = prompt | llm
 
-
 # -------------------------------------------------
 # AGENT NODE
 # -------------------------------------------------
 def agent_node(state: AgentState):
     result = llm_with_prompt.invoke({"messages": state["messages"]})
     return {"messages": state["messages"] + [result]}
-
 
 # -------------------------------------------------
 # GRAPH
@@ -132,8 +130,6 @@ graph = StateGraph(AgentState)
 graph.add_node("agent", agent_node)
 graph.add_node("tools", ToolNode(TOOLS))
 
-
-
 graph.add_edge(START, "agent")
 graph.add_edge("tools", "agent")
 graph.add_conditional_edges(
@@ -143,9 +139,49 @@ graph.add_conditional_edges(
 
 app = graph.compile()
 
+# -------------------------------------------------
+# RUN AGENT WITH RETRIES
+# -------------------------------------------------
+def run_agent_with_retries(url: str, max_retries: int = 5) -> str:
+    messages = [{"role": "user", "content": url}]
+    for attempt in range(1, max_retries + 1):
+        response = app.invoke({"messages": messages}, config={"recursion_limit": RECURSION_LIMIT})
+        # Get the last message after processing
+        last_message = response.get("messages", [])[-1] if "messages" in response else None
+        # Try to robustly extract "correct" and "url" from the server/tool output
+        is_correct = None
+        next_url = None
+        if isinstance(last_message, dict):
+            is_correct = last_message.get("correct")
+            next_url = last_message.get("url")
+            # Sometimes, the answer information could be inside 'content':
+            if isinstance(last_message.get("content"), dict):
+                content = last_message["content"]
+                is_correct = content.get("correct", is_correct)
+                next_url = content.get("url", next_url)
+        elif hasattr(last_message, "correct"):
+            is_correct = getattr(last_message, "correct")
+            next_url = getattr(last_message, "url", None)
+        print(f"Attempt {attempt}: Correct={is_correct}, Next URL={next_url}")
+        # Success, break/restart for next task!
+        if is_correct:
+            print(f"Task solved in {attempt} attempt(s). Moving to next if available.")
+            if next_url and next_url != url:
+                return run_agent_with_retries(next_url, max_retries)
+            else:
+                return "All tasks completed."
+        if attempt >= max_retries:
+            print(f"Max retries ({max_retries}) reached for this task. Skipping to next, if available.")
+            if next_url and next_url != url:
+                print(f"Moving to next URL: {next_url}")
+                return run_agent_with_retries(next_url, max_retries)
+            else:
+                print("No further URL found. Ending task sequence.")
+                return "Max retries reached and no further URL. Stopping."
+    return "Agent retry loop ended."
 
 # -------------------------------------------------
-# TEST
+# OLD TEST ENTRY (can remove or keep for backward compatibility)
 # -------------------------------------------------
 def run_agent(url: str) -> str:
     app.invoke({
@@ -153,4 +189,3 @@ def run_agent(url: str) -> str:
         config={"recursion_limit": RECURSION_LIMIT},
     )
     print("Tasks completed succesfully")
-
